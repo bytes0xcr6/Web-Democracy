@@ -14,81 +14,90 @@ pragma solidity ^0.8.17;
 import "./WebDemocracy.sol";
 
 contract Ecommerce {
+
     // The company will have to add the Arbitration address when creating a new contract
-    WebDemocracy disputeSC;
+    WebDemocracy arbitrage;
 
     address public buyer;
     address public seller;
     address public winner;
     uint24 public dificulty = 1 days; // Easy (Ecommerce)
-    uint public disputeFee = 0.005 ether; // Aprox 10$
+    uint public disputeFee; // Aprox 10$
     bool public disputeRequested;
-    uint8 public nbJurysNeeded = 5;
+    uint8 public nbJuryNeeded = 5; // Set by default for Ecommerce contracts, depending on the arrangement with the partner it could change.
+    uint coldDowntimeAppeal;
+    uint withdrawnTime;
+    /* Dispute levels.*/
+    uint easy = block.timestamp + 1 days; // Easy level.
+    // uint intermediate = block.timestamp + 1 weeks; // Intermediate level.
+    // uint dificult = block.timestamp + 4 weeks; // Dificult level.
 
-    enum Status {
-        NOTSTARTED,
-        STARTED,
-        FINISHED
-    }
-
-    Status disputeStatus;
-
-    modifier onlyArbitrage() {
-        require(msg.sender == address(disputeSC));
+    modifier onlyArbitrage{
+        require(msg.sender == address(arbitrage), "You are not the Arbitrage contract");
         _;
     }
 
-    constructor(
-        address _buyer,
-        address _seller,
-        WebDemocracy _disputeSC
-    ) {
-        buyer = _buyer;
-        seller = _seller;
-        disputeSC = _disputeSC;
+    constructor(WebDemocracy _arbitrage) {
+        seller = msg.sender;
+        arbitrage = _arbitrage;
     }
+
 
     /* @dev this function will call the function generateDispute() from the Arbitrage contract and send ethers for the dispute fee.
             Also, it will start the decentralized dispute, generating random judges and allowing them to vote.
             The msg.value should be at least half of the disputeFee, as it needs to be called twice , it will transfer the total disputeFee value.
     */
     function generateDispute() public payable {
-        require(msg.sender == buyer || msg.sender == seller);
+        require(msg.sender == buyer || msg.sender == seller, "You need to be the Buyer or the Seller");
+        disputeFee = arbitrage.arbitrationFee(nbJuryNeeded);
         require(msg.value >= disputeFee / 2);
-        payable(disputeSC).transfer(msg.value);
-        if (!disputeRequested) {
+        if(!disputeRequested){
+            payable (address(this)).transfer(msg.value);
             disputeRequested = true;
-        } else {
-            // We will do a call to the Arbitrage SC and the address will be assigned to disputasSC
-            disputeSC.generateDispute(buyer, seller, dificulty, nbJurysNeeded);
-            disputeStatus = Status.STARTED;
+
+        }  else{
+        // We will do a call to the Arbitrage SC and the address will be assigned to disputasSC
+            arbitrage.generateDispute(buyer, seller, easy, nbJuryNeeded);
+            payable (arbitrage).transfer(disputeFee);
         }
     }
 
-    /* @dev this function will allow the winner to withdrawal the total balance in the contract
-     */
-    function withdrawal(address _winner) external {
-        require(address(disputeSC) == msg.sender);
-        winner = _winner;
-        payable(winner).transfer(address(this).balance);
-        disputeStatus = Status.FINISHED;
+    function appeal(uint _disputeID) public{
+        require(msg.sender == buyer || msg.sender == seller, "You need to be the Buyer or the Seller");
+        arbitrage.appeal(_disputeID, nbJuryNeeded, dificulty);
     }
 
-    function checkBuyer() public view returns (address) {
+    /* @dev this function will allow the winner to withdrawal the total balance in the contract
+    */ 
+    function withdrawal() external{
+        require(withdrawnTime > block.timestamp, "The withdrawn time is not over");
+        require(coldDowntimeAppeal <= block.timestamp, "You need to wait until the appeal time is over");
+        require(winner == msg.sender, "You are not the winner");
+        payable (winner).transfer(address(this).balance);
+        
+    }
+
+    function checkBuyer() public view returns(address){ 
         return buyer;
     }
 
-    function checkSeller() public view returns (address) {
+    function checkSeller() public view returns(address){ 
         return seller;
     }
 
-    function checkStatusDispute() public view returns (Status) {
-        return disputeStatus;
+    /* @dev The Arbitrage contract will set the winner externally and 
+    *  Setter for the cold down time in case complainants want to appel. They cannot withdraw the contract value until it has passed
+    */
+    function setWinner(address _winner) external onlyArbitrage{
+        winner = _winner;
+        coldDowntimeAppeal = 1 days + block.timestamp;
     }
 
-    /* @dev The Arbitrage contract will set the winner externally
-     */
-    function setWinner(address _winner) external onlyArbitrage {
-        winner = _winner;
+
+    function buyProduct() public payable{
+        require(msg.value >= 10 ether, "You need to send more ETH to buy the product");
+        buyer = msg.sender;
+        withdrawnTime = 1 weeks + block.timestamp;
     }
+
 }

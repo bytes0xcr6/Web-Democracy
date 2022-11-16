@@ -50,14 +50,20 @@ contract WebDemocracy is ERC20, Ownable {
         address buyer; // The buyer in the Smartcontract under Arbitrage.
         address seller; // The seller in the Smartcontract under Arbitrage.
         Ecommerce disputaSC; // Arbitrage contract. (The contract that started the dispute)
-        uint disputeID; // Identificator for the Dispute ID.
         bool active; // Toggle to check if the Dispute is active or finished.
-        uint256 comision; // Total comision paid by the complainants. (1/2 will be shared to WD and the Jury)
+        uint comision; // Total comision paid by the complainants. (1/2 will be shared to WD and the Jury)
+        uint timeToVote; // Total time to place the vote.
         uint8 buyerCount; // Votes count for the buyer
         uint8 sellerCount; // Votes count for the seller.
-        uint timeToVote; // Total time to place the vote.
-        uint8 juryNeeded;
+        uint8 juryNeeded; // Amount of Jury needed for the case.
+        uint8 appealTime; // 1 days.
+        uint8 appealCount; // How many times the appelation process was done;
         DisputeStatus disputeStatus; // Actual status for the dispute.
+    }
+
+    modifier protocolActive() {
+        require(protocolWorking, "Protocol under maintenance");
+        _;
     }
 
     //**********************//
@@ -69,23 +75,12 @@ contract WebDemocracy is ERC20, Ownable {
 
     /* Variables which will subject to the governance mechanism.*/
     uint public disputesCounter; // Total disputes created.
-    uint public penaltiFee = 100; // Penalty fee for no voting in time.
+    uint public penaltyFee = 100; // Penalty fee for no voting in time.
     uint public tokenPrice = 0.0001 ether;
     uint public arbitrationFeePerJuror = 0.005 ether; // Fee per juror.
-    uint public protocolFee = 3; // WebDemocracy Fee %.
+    uint8 public protocolFee = 3; // WebDemocracy Fee %.
     bool public sellingTokens; // Toggle to sell or stop selling tokens.
-    bool public protocolActive; // Toggle to accept or not accept new Disputes.
-
-    /* Dispute levels.*/
-    uint easy = block.timestamp + 1 days; // Easy level.
-    uint intermediate = block.timestamp + 1 weeks; // Intermediate level.
-    uint dificult = block.timestamp + 4 weeks; // Dificult level.
-
-    //**********************//
-    //        Arrays        //
-    //**********************//
-
-    address[] public stakers; // Array to track the stakers.
+    bool public protocolWorking = true; // Toggle to accept or not accept new Disputes.
 
     //**********************//
     //       Mapping        //
@@ -98,17 +93,19 @@ contract WebDemocracy is ERC20, Ownable {
     mapping(address => bool) public jurorStaking; // Juror address => Juror staking (boolean)
     mapping(address => bool) public stakedOnce; // Juror address => Juror staked at least once (boolean)
     mapping(uint => address[]) juryDispute; // DisputeID => Jury selected for that dispute (Array with addresses)
-    mapping(uint => mapping(uint8 => address[])) public juryDisputeCount; // DisputeID => voting Choice(1 Buyer, 2 Seller) => Jury voted (Array with addreses)
+    mapping(uint => mapping(uint8 => mapping(uint8 => address[])))
+        public juryDisputeCount; // DisputeID => Dispute(value 1) or Apelation(Value2) => voting Choice(1 Buyer, 2 Seller) => Jury voted (Array with addreses)
     mapping(address => int) public honestyScore; // Juror address => honesty Score (int + or -)
     mapping(uint => mapping(address => bool)) rightToVote; // Dispute ID => Jury address => Juror has rights to vote (boolean)
-    mapping(address => mapping(uint => uint8)) jurorVoted; // Jury address => disputeID => voting Choice (1 Buyer, 2 Seller)
-    mapping(address => bool) underDispute; // Jury address => Juror under dispute. (Boolean)
+    mapping(address => mapping(uint => mapping(uint8 => uint8))) jurorVoted; // Juror address => disputeID => Dispute(value 1) or Apelation(Value2) => voting Choice (1 Buyer, 2 Seller)
+    mapping(address => bool) underDispute; // Juror address => Juror under dispute. (Boolean)
+    mapping(uint => address[]) appealJury; // disputeID => Jury addresses
 
     //**********************//
     //        Events        //
     //**********************//
 
-    /**
+    /*
         @dev Emited when a new dispute is generated.
         @param buyer: The buyer in the Smartcontract under Arbitrage.
         @param seller: The seller in the Smartcontract under Arbitrage.
@@ -162,7 +159,7 @@ contract WebDemocracy is ERC20, Ownable {
     */
     event DisputeFinished(uint disputeID, uint8 winner);
 
-    /**
+    /*
      * @dev Constructor.
      * @param _webDemocracy: Protocol address and Owner.
      * @param webDemocracy: ERC20 token Name.
@@ -178,7 +175,7 @@ contract WebDemocracy is ERC20, Ownable {
      * @param _amount: The amount willing to buy.
      */
     function buyTokens(uint _amount) public payable {
-        require(sellingTokens, "Use DEX and CEX to buy DEM");
+        require(sellingTokens, "Use DEX and CEX");
         uint price = _totalPrice(_amount);
         require(msg.value >= price);
         uint extra = msg.value - price;
@@ -188,18 +185,25 @@ contract WebDemocracy is ERC20, Ownable {
     }
 
     /**
+     * @dev It allow users to move tokens from one to another account.
+     * @param _to: Address we want to transfer to.
+     * @param _amount: Amount of tokens we want to transfer.
+     */
+    function transfer(address _to, uint _amount)
+        public
+        override
+        returns (bool success)
+    {
+        _transfer(msg.sender, _to, _amount);
+        return success;
+    }
+
+    /**
      * @dev Internal function to get the total price, checking the actual price of the token. (Used during private round)
      * @param _amount: The amount we would like to convert
      */
     function _totalPrice(uint _amount) internal view returns (uint) {
         return _amount * tokenPrice;
-    }
-
-    /**
-     * @dev It returns the total balance of the Smart contract in Ethers.
-     */
-    function balanceOfSc() public view returns (uint) {
-        return address(this).balance;
     }
 
     /**
@@ -224,25 +228,17 @@ contract WebDemocracy is ERC20, Ownable {
      * @param _amount: Total amount willing to stake
      */
     function stake(uint _amount) public {
-        require(
-            balanceOf(msg.sender) >= _amount,
-            "You do not have enough tokens to stake"
-        );
-        require(
-            _amount >= penaltiFee,
-            "You need to stake at least the penaltiFee"
-        ); // Minimum to stake is the penalty fee
+        require(balanceOf(msg.sender) >= _amount, "Insufficient balance");
+        require(_amount >= penaltyFee, "minimum PenaltyFee"); // Minimum to stake is the penalty fee
         require(
             (_amount + tokensStaked[msg.sender]) < totalSupply() * (3 * 100),
-            "Maximum to stake is 3% of the totalSupply"
+            "Max to stake is 3% of the totalSupply"
         );
         // Transfer the tokens to the main contract to be staked
         _transfer(msg.sender, address(this), _amount);
         // Add him to the stakers array if it is the first time the user stakes
         uint _tokensStaked = _checkTokensStaked(msg.sender);
         if (_tokensStaked == 0 && !stakedOnce[msg.sender]) {
-            stakers.push(msg.sender);
-            stakedOnce[msg.sender] = true;
             emit newStaker(msg.sender, _amount);
         }
         // Update mapping stakers
@@ -276,7 +272,7 @@ contract WebDemocracy is ERC20, Ownable {
     }
 
     /**
-     * @dev It starts the Dispute process. Also, it calls the generate random Judge and storing all the dispute details.
+     * @dev It starts the Dispute process. Also, it calls the generate random Jury algorithm and stores all the dispute details.
      * To call this function the protocol needs to be Activated and the msg.value must be greater than the Fees needed
      * for paying the Jury.
      * @param _buyer: The buyer in the Smartcontract under Arbitrage.
@@ -287,26 +283,26 @@ contract WebDemocracy is ERC20, Ownable {
     function generateDispute(
         address _buyer,
         address _seller,
-        uint24 _dificulty,
+        uint _dificulty,
         uint8 _juryNeeded
-    ) external payable {
+    ) external payable protocolActive {
         require(
             msg.value >= arbitrationFeePerJuror * _juryNeeded,
-            "Not enough ETH to pay the Jurys fee."
+            "Not enough ETH to pay the Jury fee."
         );
-        require(protocolActive, "The protocol is under maintenance...");
 
         Dispute memory dispute = Dispute(
             _buyer,
             _seller,
             Ecommerce(msg.sender),
-            disputesCounter,
             true,
             msg.value,
+            _dificulty,
             0,
             0,
-            easy,
             _juryNeeded,
+            0 days,
+            0,
             DisputeStatus.Started
         );
 
@@ -317,29 +313,85 @@ contract WebDemocracy is ERC20, Ownable {
     }
 
     /**
+     * @dev It generates a sencond dispute. Also, it calls the generate random Jury algorithm and stores all the dispute details.
+     * To call this function the protocol needs to be Activated and the msg.value must be greater than the Fees needed
+     * for paying the Jury.
+     */
+    function appeal(
+        uint _disputeID,
+        uint8 _juryNeeded,
+        uint _dificulty
+    ) external payable protocolActive {
+        require(
+            msg.value >= arbitrationFeePerJuror * _juryNeeded,
+            "Not enough ETH to pay the Jury fee."
+        );
+        require(
+            disputeInfo[_disputeID].disputeStatus == DisputeStatus.Finished,
+            "The dispute has not finished yet"
+        );
+        require(
+            disputeInfo[_disputeID].appealTime < block.timestamp,
+            "The appeal time is over"
+        );
+        require(
+            disputeInfo[_disputeID].appealCount == 0,
+            "You can appeal just one time"
+        );
+        require(
+            address(disputeInfo[_disputeID].disputaSC) == msg.sender,
+            "Needs to be called by the Ecommerce"
+        );
+
+        disputeInfo[_disputeID].disputeStatus = DisputeStatus.UnderApelation;
+        disputeInfo[_disputeID].active = true;
+        disputeInfo[_disputeID].appealCount = 1;
+        disputeInfo[_disputeID].comision = msg.value;
+        disputeInfo[_disputeID].buyerCount = 0;
+        disputeInfo[_disputeID].sellerCount = 0;
+        disputeInfo[_disputeID].timeToVote = _dificulty;
+        disputeInfo[_disputeID].disputeStatus = DisputeStatus.UnderApelation;
+
+        emit DisputeGenerated(
+            disputeInfo[_disputeID].buyer,
+            disputeInfo[_disputeID].seller,
+            _disputeID,
+            disputeInfo[_disputeID].timeToVote
+        );
+    }
+
+    /*
      *  @dev WebDemocracy.org will listen to the event DisputeGenerated(), when the function generateDispute() is called
      *  and will generate random selection of Jury for the dispute. (Depending on the number of tokens staked and the Jury honesty score)
-     *  This function will store the Jury selection to the ID Dispute.
+     *  This function will store the Jury selection to the ID Dispute. But if the Dispute is under Apelation, it will store it in a new array.
      * @param _disputeID: ID representing the Dispute.
      * @param _jurySelected: Jury selected for this specific dispute.
      */
-    function storeJurys(uint _disputeID, address[] memory _jurysSelected)
+    function storeJurys(uint _disputeID, address[] memory _jurySelected)
         public
         onlyOwner
     {
-        juryDispute[_disputeID] = _jurysSelected;
-
-        for (uint i; i > _jurysSelected.length; i++) {
-            rightToVote[_disputeID][_jurysSelected[i]] = true;
-            underDispute[_jurysSelected[i]] = true; // It will store the Jury as underDispute to do not allow unstake.
+        if (
+            disputeInfo[_disputeID].disputeStatus ==
+            DisputeStatus.UnderApelation
+        ) {
+            appealJury[_disputeID] = _jurySelected;
+        } else {
+            juryDispute[_disputeID] = _jurySelected;
         }
 
-        emit JuryGenerated(_disputeID, _jurysSelected);
+        for (uint i; i > _jurySelected.length; i++) {
+            rightToVote[_disputeID][_jurySelected[i]] = true;
+            underDispute[_jurySelected[i]] = true; // It will store the Jury as underDispute to do not allow unstake.
+        }
+
+        emit JuryGenerated(_disputeID, _jurySelected);
     }
 
     /**
      * @dev It removes the selected Juror from the Jury selected for the ID Dispute. When the event JuryGenerated() is emitted,
      * WebDemocracy will select a new random juror and will store it in the Jury selection for the ID Dispute specified.
+     * The protocol keeps the penaltyFee if the Juror did not vote.
      * @param _jurorRevocated: The Juror the protocol removes.
      * @param _newJuror: The new Juror the protocol stores.
      * @param _disputeID: ID representing the Dispute.
@@ -349,14 +401,16 @@ contract WebDemocracy is ERC20, Ownable {
         address _newJuror,
         uint _disputeID
     ) public onlyOwner {
-        uint nbJudgesDispute = juryDispute[_disputeID].length;
+        uint nbJuryDispute = juryDispute[_disputeID].length;
 
-        for (uint i; i < nbJudgesDispute; i++) {
-            if (juryDispute[_disputeID][i] == _jurorRevocated) {
-                delete juryDispute[_disputeID][i];
+        for (uint i; i < nbJuryDispute; i++) {
+            if (juryDispute[_disputeID][i] != _jurorRevocated) {
+                delete juryDispute[_disputeID]; //Clean the array with the juror revocated
+                juryDispute[_disputeID].push(juryDispute[_disputeID][i]); // Create a new array
+            } else {
+                penalizeInactiveJuror(_jurorRevocated, _disputeID); // The protocol keeps the penaltyFee if the Juror did not vote
             }
         }
-
         emit JurorRevocated(_jurorRevocated, _newJuror, _disputeID);
     }
 
@@ -367,32 +421,76 @@ contract WebDemocracy is ERC20, Ownable {
      * @param _disputeID: ID representing the Dispute.
      * @param _winnerNumber: value of the winner (1 Buyer, 2 Seller)
      */
-    function penalizeInactiveJuror(
+    function penalizeLoosers(
         address _jurorAddress,
         uint _disputeID,
         uint8 _winnerNumber
-    ) public onlyOwner {
+    ) internal onlyOwner {
         require(
             disputeInfo[_disputeID].timeToVote < block.timestamp,
             "Must be called after the voting time."
         );
         require(
-            tokensStaked[_jurorAddress] >= penaltiFee,
+            tokensStaked[_jurorAddress] >= penaltyFee,
             "Juror does not have enough staking for the fee"
         );
 
         honestyScore[_jurorAddress] -= 1;
+        uint8 honestJury;
+        uint8 disputeValue; // New dispute -> value: 0, Under apelation -> value: 1
 
-        uint honestJury = uint(
-            juryDisputeCount[_disputeID][_winnerNumber].length
+        // Determinate if the Dispute is under apelation or not.
+        if (disputeInfo[_disputeID].appealCount == 0) {
+            disputeValue = 0;
+        } else {
+            disputeValue = 1;
+        }
+
+        honestJury = uint8(
+            juryDisputeCount[_disputeID][disputeValue][_winnerNumber].length
         );
-        uint penaltyFeeEachJury = honestJury / penaltiFee; // Jurys who voted honestly share the penaltiFee.
-        tokensStaked[_jurorAddress] -= penaltiFee; // Fee will be taken from the juror staking.
+
+        uint penaltyFeeEachJury = honestJury / penaltyFee; // Jurys who voted honestly share the penaltyFee.
+        tokensStaked[_jurorAddress] -= penaltyFee; // Fee will be taken from the juror staking.
 
         for (uint i; i < honestJury; i++) {
-            address result = juryDisputeCount[_disputeID][_winnerNumber][i];
+            address result = juryDisputeCount[_disputeID][disputeValue][
+                _winnerNumber
+            ][i];
             _transfer(_jurorAddress, result, penaltyFeeEachJury);
         }
+    }
+
+    /**
+     * @dev It penalizes the penaltyFee to the Jury who did not vote. The protocol will substract the penalty fee from his staking,
+     * and it will share it between the Jury winner.
+     * @param _jurorAddress: Juror address to substract tokens. (Penalized)
+     * @param _disputeID: ID representing the Dispute.
+     */
+    function penalizeInactiveJuror(address _jurorAddress, uint _disputeID)
+        internal
+        onlyOwner
+    {
+        require(
+            disputeInfo[_disputeID].timeToVote < block.timestamp,
+            "Must be called after the voting time."
+        );
+        require(
+            tokensStaked[_jurorAddress] >= penaltyFee,
+            "Juror does not have enough staking for the fee"
+        );
+
+        honestyScore[_jurorAddress] -= 1;
+        uint8 disputeValue; // New dispute -> value: 0, Under apelation -> value: 1
+
+        // Determinate if the Dispute is under apelation or not.
+        if (disputeInfo[_disputeID].appealCount == 0) {
+            disputeValue = 0;
+        } else {
+            disputeValue = 1;
+        }
+
+        _transfer(_jurorAddress, address(this), penaltyFee); // The protocol keeps the penaltyFee if the Juror did not vote
     }
 
     /** @dev Function to store a vote and if you are the last Juror voting it will set the winner.
@@ -410,14 +508,25 @@ contract WebDemocracy is ERC20, Ownable {
         );
         require(_choose == 1 || _choose == 2, "This option is not available");
         bool votesNeeded = (disputeInfo[_disputeID].buyerCount +
-            disputeInfo[_disputeID].sellerCount) == 3;
-        jurorVoted[msg.sender][_disputeID] = _choose;
+            disputeInfo[_disputeID].sellerCount) == 5;
+
+        uint8 disputeValue;
+
+        // Determinate if the Dispute is under apelation or not.
+        if (disputeInfo[_disputeID].appealCount == 0) {
+            disputeValue = 0;
+        } else {
+            disputeValue = 0;
+        }
+
+        jurorVoted[msg.sender][_disputeID][disputeValue] = _choose;
 
         if (_choose == 1) {
             disputeInfo[_disputeID].buyerCount += 1;
 
             if (votesNeeded) {
                 disputeInfo[_disputeID].active = false;
+                withdrawalFees(_disputeID);
 
                 emit DisputeFinished(_disputeID, _choose);
             }
@@ -426,6 +535,7 @@ contract WebDemocracy is ERC20, Ownable {
 
             if (votesNeeded) {
                 disputeInfo[_disputeID].active = false;
+                withdrawalFees(_disputeID);
 
                 emit DisputeFinished(_disputeID, _choose);
             }
@@ -439,7 +549,7 @@ contract WebDemocracy is ERC20, Ownable {
      * voted to the looser complainant.
      * @param _disputeID: ID representing the Dispute.
      */
-    function withdrawalFees(uint _disputeID) public onlyOwner {
+    function withdrawalFees(uint _disputeID) private {
         require(
             !disputeInfo[_disputeID].active,
             "We are still waiting for votes to be able to withdrawal"
@@ -452,11 +562,19 @@ contract WebDemocracy is ERC20, Ownable {
         address winnerAddress;
         uint8 votedBuyer = disputeInfo[_disputeID].buyerCount;
         uint8 votedSeller = disputeInfo[_disputeID].sellerCount;
+        uint8 disputeValue;
 
         payable(webDemocracy).transfer(feeProtocol); // Payment for WD
         payable(winnerAddress).transfer(feeRefund); // Fees back to the winner
         (disputeInfo[_disputeID].disputaSC).setWinner(winnerAddress); // Set winner to be able to withdraw his funds from the Ecommerce contract.
-        disputeInfo[_disputeID].disputeStatus = DisputeStatus.Finished; // Set the Dispute status to Finished.
+
+        if (disputeInfo[_disputeID].appealCount == 0) {
+            disputeValue = 0;
+        } else {
+            disputeValue = 1;
+        }
+
+        // Set coldownTime in the Ecommerce contract. Once it has gone over the complainants will not be able to appel
         if (votedBuyer > votedSeller) {
             winnerNum = 1;
             looserNum = 2;
@@ -465,15 +583,18 @@ contract WebDemocracy is ERC20, Ownable {
             uint rewardEach = (feeRefund - feeProtocol) / votedBuyer;
 
             for (uint i; i < votedBuyer; i++) {
-                payable(juryDisputeCount[_disputeID][winnerNum][i]).transfer(
-                    rewardEach
-                );
-                honestyScore[juryDisputeCount[_disputeID][winnerNum][i]] += 1;
+                payable(
+                    juryDisputeCount[_disputeID][disputeValue][winnerNum][i]
+                ).transfer(rewardEach);
+                address juror = juryDisputeCount[_disputeID][disputeValue][
+                    winnerNum
+                ][i];
+                honestyScore[juror] += 1;
             }
 
             for (uint i; i < votedSeller; i++) {
-                penalizeInactiveJuror(
-                    juryDisputeCount[_disputeID][looserNum][i],
+                penalizeLoosers(
+                    juryDisputeCount[_disputeID][disputeValue][looserNum][i],
                     _disputeID,
                     winnerNum
                 );
@@ -487,31 +608,67 @@ contract WebDemocracy is ERC20, Ownable {
             uint rewardEach = (feeRefund - feeProtocol) / votedSeller;
 
             for (uint i; i < votedSeller; i++) {
-                payable(juryDisputeCount[_disputeID][winnerNum][i]).transfer(
-                    rewardEach
-                );
-                honestyScore[juryDisputeCount[_disputeID][winnerNum][i]] += 1;
+                payable(
+                    juryDisputeCount[_disputeID][disputeValue][winnerNum][i]
+                ).transfer(rewardEach);
+                address juror = juryDisputeCount[_disputeID][disputeValue][
+                    winnerNum
+                ][i];
+                honestyScore[juror] += 1;
             }
 
             for (uint i; i < votedBuyer; i++) {
-                penalizeInactiveJuror(
-                    juryDisputeCount[_disputeID][looserNum][i],
+                penalizeLoosers(
+                    juryDisputeCount[_disputeID][disputeValue][looserNum][i],
                     _disputeID,
                     winnerNum
                 );
             }
         }
+        disputeInfo[_disputeID].disputeStatus = DisputeStatus.Finished; // Set the Dispute status to Finished.
     }
 
     /**
      * @dev Setter for the Token price while the private round. I can be called only by the Owner.
      * @param _price: New token price we want to set.
      */
-    function updateTokenPrice(uint _price) public onlyOwner {
+    function updateTokenPrice(uint _price) private onlyOwner {
         tokenPrice = _price;
     }
 
     /**
+     * @dev Setter stop the protocol to generate new Disputes.
+     *  It can be used while maintenance or if needed.
+     */
+    function stopNewDisputes() private onlyOwner {
+        protocolWorking = false;
+    }
+
+    /**
+     * @dev Setter to update the Fee Web Democracy gets.
+     * @param _newFee: New fee we want to set for Web Democracy.
+     */
+    function _setWDFee(uint8 _newFee) private onlyOwner {
+        protocolFee = _newFee;
+    }
+
+    /**
+     * @dev Setter to update the Owner address.
+     * @param _newOwner: New address we want to set as the Owner.
+     */
+    function setNewOnwer(address payable _newOwner) private onlyOwner {
+        webDemocracy = _newOwner;
+    }
+
+    /**
+     * @dev Setter to stop selling tokens when the private round is finished.
+     * @param _status: Value to allow or refuse the token sale.
+     */
+    function tokenSale(bool _status) private {
+        sellingTokens = _status;
+    }
+
+    /*
      * @dev Geetter for how many DEM staked has the Juror address.
      * @param _juro: Juror address.
      */
@@ -520,18 +677,10 @@ contract WebDemocracy is ERC20, Ownable {
     }
 
     /**
-     * @dev Setter stop the protocol to generate new Disputes.
-     *  It can be used while maintenance or if needed.
-     */
-    function stopNewDisputes() public onlyOwner {
-        protocolActive = false;
-    }
-
-    /**
      * @dev Getter for checking if a Juror is staking.
      * @param _juror: Juror address.
      */
-    function isActive(address _juror) public view returns (bool) {
+    function _isActive(address _juror) internal view returns (bool) {
         return jurorStaking[_juror];
     }
 
@@ -539,39 +688,27 @@ contract WebDemocracy is ERC20, Ownable {
      * @dev Setter to update the Fee each Juror gets.
      * @param _newFee: New fee we want to set for each juror.
      */
-    function setArbitrationFee(uint _newFee) public onlyOwner {
+    function _setArbitrationFee(uint _newFee) internal onlyOwner {
         arbitrationFeePerJuror = _newFee;
-    }
-
-    /**
-     * @dev Setter to update the Fee Web Democracy gets.
-     * @param _newFee: New fee we want to set for Web Democracy.
-     */
-    function setWDFee(uint _newFee) public onlyOwner {
-        protocolFee = _newFee;
     }
 
     /**
      * @dev Getter for the protocol Fee;
      */
-    function _checkProtocolFee() public view returns (uint) {
+    function _checkProtocolFee() internal view returns (uint) {
         return protocolFee;
     }
 
-    /**
-     * @dev Setter to update the Owner address.
-     * @param _newOwner: New address we want to set as the Owner.
-     */
-    function setNewOnwer(address payable _newOwner) public onlyOwner {
-        webDemocracy = _newOwner;
+    function _checkDispute(uint _disputeID)
+        internal
+        view
+        returns (Dispute memory)
+    {
+        return disputeInfo[_disputeID];
     }
 
-    /**
-     * @dev Setter to stop selling tokens when the private round is finished.
-     * @param _status: Value to allow or refuse the token sale.
-     */
-    function tokenSale(bool _status) public {
-        sellingTokens = _status;
+    function arbitrationFee(uint8 _nbJury) public view returns (uint) {
+        return arbitrationFeePerJuror * _nbJury;
     }
 
     receive() external payable {}
