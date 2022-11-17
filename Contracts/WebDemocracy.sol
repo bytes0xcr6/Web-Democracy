@@ -179,7 +179,8 @@ contract WebDemocracy is ERC20, Ownable {
         uint price = _totalPrice(_amount);
         require(msg.value >= price);
         uint extra = msg.value - price;
-        payable(tx.origin).transfer(extra);
+        payable(tx.origin).transfer(extra);        
+        _transfer(address(this), msg.sender, _amount);
 
         emit TokenPurchased(msg.sender, _amount);
     }
