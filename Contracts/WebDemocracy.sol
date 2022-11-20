@@ -344,14 +344,16 @@ contract WebDemocracy is ERC20, Ownable {
             "Needs to be called by the Ecommerce"
         );
 
-        disputeInfo[_disputeID].disputeStatus = DisputeStatus.UnderApelation;
-        disputeInfo[_disputeID].active = true;
-        disputeInfo[_disputeID].appealCount = 1;
-        disputeInfo[_disputeID].comision = msg.value;
-        disputeInfo[_disputeID].buyerCount = 0;
-        disputeInfo[_disputeID].sellerCount = 0;
-        disputeInfo[_disputeID].timeToVote = _dificulty;
-        disputeInfo[_disputeID].disputeStatus = DisputeStatus.UnderApelation;
+
+        disputeInfo[_disputeID] = Dispute({
+            disputeStatus:DisputeStatus.UnderApelation, 
+            active: true, 
+            appealCount: 1, 
+            comision: msg.value, 
+            buyerCount: 0, 
+            sellerCount: 0, 
+            timeToVote: _dificulty 
+            });
 
         emit DisputeGenerated(
             disputeInfo[_disputeID].buyer,
