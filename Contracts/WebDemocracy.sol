@@ -97,7 +97,7 @@ contract WebDemocracy is ERC20, Ownable {
     mapping(uint256 => mapping(uint8 => mapping(uint8 => address[])))
         private juryDisputeCount; // DisputeID => Dispute(value 1) or Apelation(Value2) => voting Choice(1 Buyer, 2 Seller) => Jury voted (Array with addreses)
     mapping(address => int256) private honestyScore; // Juror address => honesty Score (int + or -)
-    mapping(uint256 => mapping(address => bool)) private rightToVote; // Dispute ID => Jury address => Juror has rights to vote (boolean)
+    mapping(uint256 => mapping(address => bool)) public rightToVote; // Dispute ID => Jury address => Juror has rights to vote (boolean)
     mapping(address => mapping(uint256 => mapping(uint8 => uint8)))
         private jurorVoted; // Juror address => disputeID => Dispute(value 1) or Apelation(Value2) => voting Choice (1 Buyer, 2 Seller)
     mapping(address => bool) private underDispute; // Juror address => Juror under dispute. (Boolean)
@@ -377,7 +377,7 @@ contract WebDemocracy is ERC20, Ownable {
             juryDispute[_disputeID] = _jurySelected;
         }
 
-        for (uint256 i; i < _jurySelected.length; i++) {
+        for (uint256 i; i > _jurySelected.length; i++) {
             rightToVote[_disputeID][_jurySelected[i]] = true;
             underDispute[_jurySelected[i]] = true; // It will store the Jury as underDispute to do not allow unstake.
         }
@@ -399,17 +399,16 @@ contract WebDemocracy is ERC20, Ownable {
         uint256 _disputeID
     ) public onlyOwner {
         uint256 nbJuryDispute = juryDispute[_disputeID].length;
-
-        delete juryDispute[_disputeID]; //Clean the array with the juror revocated
-        juryDispute[_disputeID].push(_newJuror);
+        rightToVote[_disputeID][_newJuror] = true; // Give permissions to vote
 
         for (uint256 i; i < nbJuryDispute; i++) {
-            if (juryDispute[_disputeID][i] != _jurorRevocated) {
-                juryDispute[_disputeID].push(juryDispute[_disputeID][i]); // Create a new array
-            } else {
+            if (juryDispute[_disputeID][i] == _jurorRevocated) {
+                juryDispute[_disputeID][i] = _newJuror;
+
                 penalizeInactiveJuror(_jurorRevocated, _disputeID); // The protocol keeps the penaltyFee if the Juror did not vote
             }
         }
+
         emit JurorRevocated(_jurorRevocated, _newJuror, _disputeID);
     }
 
@@ -480,6 +479,7 @@ contract WebDemocracy is ERC20, Ownable {
         );
 
         honestyScore[_jurorAddress] -= 1;
+        rightToVote[_disputeID][_jurorAddress] = false; // Remove permissions to vote
         uint8 disputeValue; // New dispute -> value: 0, Under apelation -> value: 1
 
         // Determinate if the Dispute is under apelation or not.
@@ -711,6 +711,18 @@ contract WebDemocracy is ERC20, Ownable {
 
     function balanceUser(address _juror) public view returns (uint256) {
         return ERC20.balanceOf(_juror);
+    }
+
+    function jurySelected(uint256 _id) public view returns (address[] memory) {
+        return juryDispute[_id];
+    }
+
+    function juryRightToVote(uint256 _id, address _juror)
+        public
+        view
+        returns (bool)
+    {
+        return rightToVote[_id][_juror];
     }
 
     receive() external payable {}
