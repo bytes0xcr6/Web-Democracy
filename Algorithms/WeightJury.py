@@ -1,7 +1,8 @@
 # a,b,c son los token staked de los jueces A,B,C respectivamente
 # x,y,z son los honesty score de los jueces A,B,C respectivamente
 
-
+# Getters and Setters for the Blockchain:
+#
 # activeJury[] (Getter) + (Setter)
 # tokensStaked[] (Getter)
 # honestyScore[] (Getter)
