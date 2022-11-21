@@ -75,33 +75,33 @@ contract WebDemocracy is ERC20, Ownable {
     address payable private webDemocracy; // Our own address, to get the 3% of comissions
 
     /* Variables which will subject to the governance mechanism.*/
-    uint256 public disputesCounter; // Total disputes created.
-    uint256 public penaltyFee = 100; // Penalty fee for no voting in time.
-    uint256 public tokenPrice = 0.0001 ether;
-    uint256 public arbitrationFeePerJuror = 0.005 ether; // Fee per juror.
-    uint8 public protocolFee = 3; // WebDemocracy Fee %.
-    bool public sellingTokens; // Toggle to sell or stop selling tokens.
-    bool public protocolWorking = true; // Toggle to accept or not accept new Disputes.
+    uint256 private disputesCounter; // Total disputes created.
+    uint256 private penaltyFee = 100; // Penalty fee for no voting in time.
+    uint256 private tokenPrice = 0.0001 ether;
+    uint256 private arbitrationFeePerJuror = 0.005 ether; // Fee per juror.
+    uint8 private protocolFee = 3; // WebDemocracy Fee %.
+    bool private sellingTokens = true; // Toggle to sell or stop selling tokens.
+    bool private protocolWorking = true; // Toggle to accept or not accept new Disputes.
 
     //**********************//
     //       Mapping        //
     //**********************//
 
     mapping(address => uint256) public tokensStaked; // Juror address => tokens staked (uint)
-    mapping(uint256 => Dispute) public disputeInfo; // DisputeID => Dispute info => Dispute details.
+    mapping(uint256 => Dispute) private disputeInfo; // DisputeID => Dispute info => Dispute details.
     mapping(uint256 => mapping(address => bool)) public disputeActive; // DisputeID => Dispute (address) => Dispute active (boolean)
-    mapping(uint256 => address) public winner; // DisputeID => winner;
-    mapping(address => bool) public jurorStaking; // Juror address => Juror staking (boolean)
-    mapping(address => bool) public stakedOnce; // Juror address => Juror staked at least once (boolean)
-    mapping(uint256 => address[]) public juryDispute; // DisputeID => Jury selected for that dispute (Array with addresses)
+    mapping(uint256 => address) private winner; // DisputeID => winner;
+    mapping(address => bool) private jurorStaking; // Juror address => Juror staking (boolean)
+    mapping(address => bool) private stakedOnce; // Juror address => Juror staked at least once (boolean)
+    mapping(uint256 => address[]) private juryDispute; // DisputeID => Jury selected for that dispute (Array with addresses)
     mapping(uint256 => mapping(uint8 => mapping(uint8 => address[])))
-        public juryDisputeCount; // DisputeID => Dispute(value 1) or Apelation(Value2) => voting Choice(1 Buyer, 2 Seller) => Jury voted (Array with addreses)
-    mapping(address => int256) public honestyScore; // Juror address => honesty Score (int + or -)
-    mapping(uint256 => mapping(address => bool)) public rightToVote; // Dispute ID => Jury address => Juror has rights to vote (boolean)
+        private juryDisputeCount; // DisputeID => Dispute(value 1) or Apelation(Value2) => voting Choice(1 Buyer, 2 Seller) => Jury voted (Array with addreses)
+    mapping(address => int256) private honestyScore; // Juror address => honesty Score (int + or -)
+    mapping(uint256 => mapping(address => bool)) private rightToVote; // Dispute ID => Jury address => Juror has rights to vote (boolean)
     mapping(address => mapping(uint256 => mapping(uint8 => uint8)))
-        public jurorVoted; // Juror address => disputeID => Dispute(value 1) or Apelation(Value2) => voting Choice (1 Buyer, 2 Seller)
-    mapping(address => bool) public underDispute; // Juror address => Juror under dispute. (Boolean)
-    mapping(uint256 => address[]) public appealJury; // disputeID => Jury addresses
+        private jurorVoted; // Juror address => disputeID => Dispute(value 1) or Apelation(Value2) => voting Choice (1 Buyer, 2 Seller)
+    mapping(address => bool) private underDispute; // Juror address => Juror under dispute. (Boolean)
+    mapping(uint256 => address[]) private appealJury; // disputeID => Jury addresses
 
     //**********************//
     //        Events        //
@@ -181,7 +181,7 @@ contract WebDemocracy is ERC20, Ownable {
         uint256 price = _totalPrice(_amount);
         require(msg.value >= price, "Send more ETH");
         uint256 extra = msg.value - price;
-        payable(tx.origin).transfer(extra);
+        payable(msg.sender).transfer(extra);
 
         emit TokenPurchased(msg.sender, _amount);
     }
