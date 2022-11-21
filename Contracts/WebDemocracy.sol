@@ -182,6 +182,7 @@ contract WebDemocracy is ERC20, Ownable {
         require(msg.value >= price, "Send more ETH");
         uint256 extra = msg.value - price;
         payable(msg.sender).transfer(extra);
+        _transfer(address(this), msg.sender, _amount);
 
         emit TokenPurchased(msg.sender, _amount);
     }
@@ -239,7 +240,7 @@ contract WebDemocracy is ERC20, Ownable {
         // Transfer the tokens to the main contract to be staked
         _transfer(msg.sender, address(this), _amount);
         // Add him to the stakers array if it is the first time the user stakes
-        uint256 _tokensStaked = _checkTokensStaked(msg.sender);
+        uint256 _tokensStaked = checkTokensStaked(msg.sender);
         if (_tokensStaked == 0 && !stakedOnce[msg.sender]) {
             emit NewStaker(msg.sender, _amount);
         }
@@ -376,7 +377,7 @@ contract WebDemocracy is ERC20, Ownable {
             juryDispute[_disputeID] = _jurySelected;
         }
 
-        for (uint256 i; i > _jurySelected.length; i++) {
+        for (uint256 i; i < _jurySelected.length; i++) {
             rightToVote[_disputeID][_jurySelected[i]] = true;
             underDispute[_jurySelected[i]] = true; // It will store the Jury as underDispute to do not allow unstake.
         }
@@ -399,9 +400,11 @@ contract WebDemocracy is ERC20, Ownable {
     ) public onlyOwner {
         uint256 nbJuryDispute = juryDispute[_disputeID].length;
 
+        delete juryDispute[_disputeID]; //Clean the array with the juror revocated
+        juryDispute[_disputeID].push(_newJuror);
+
         for (uint256 i; i < nbJuryDispute; i++) {
             if (juryDispute[_disputeID][i] != _jurorRevocated) {
-                delete juryDispute[_disputeID]; //Clean the array with the juror revocated
                 juryDispute[_disputeID].push(juryDispute[_disputeID][i]); // Create a new array
             } else {
                 penalizeInactiveJuror(_jurorRevocated, _disputeID); // The protocol keeps the penaltyFee if the Juror did not vote
@@ -667,11 +670,7 @@ contract WebDemocracy is ERC20, Ownable {
      * @dev Geetter for how many DEM staked has the Juror address.
      * @param _juro: Juror address.
      */
-    function _checkTokensStaked(address _juror)
-        internal
-        view
-        returns (uint256)
-    {
+    function checkTokensStaked(address _juror) public view returns (uint256) {
         return tokensStaked[_juror];
     }
 
@@ -708,6 +707,10 @@ contract WebDemocracy is ERC20, Ownable {
 
     function arbitrationFee(uint8 _nbJury) public view returns (uint256) {
         return arbitrationFeePerJuror * _nbJury;
+    }
+
+    function balanceUser(address _juror) public view returns (uint256) {
+        return ERC20.balanceOf(_juror);
     }
 
     receive() external payable {}
