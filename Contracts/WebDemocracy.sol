@@ -558,10 +558,6 @@ contract WebDemocracy is ERC20, Ownable {
         uint8 votedSeller = disputeInfo[_disputeID].sellerCount;
         uint8 disputeValue;
 
-        payable(webDemocracy).transfer(feeProtocol); // Payment for WD
-        payable(winnerAddress).transfer(feeRefund); // Fees back to the winner
-        (disputeInfo[_disputeID].disputaSC).setWinner(winnerAddress); // Set winner to be able to withdraw his funds from the Ecommerce contract.
-
         if (disputeInfo[_disputeID].appealCount == 0) {
             disputeValue = 0;
         } else {
@@ -577,12 +573,11 @@ contract WebDemocracy is ERC20, Ownable {
             uint256 rewardEach = (feeRefund - feeProtocol) / votedBuyer;
 
             for (uint256 i; i < votedBuyer; i++) {
-                payable(
-                    juryDisputeCount[_disputeID][disputeValue][winnerNum][i]
-                ).transfer(rewardEach);
-                address juror = juryDisputeCount[_disputeID][disputeValue][
-                    winnerNum
-                ][i];
+                payable(juryDisputeCount[_disputeID][disputeValue][1][i])
+                    .transfer(rewardEach);
+                address juror = juryDisputeCount[_disputeID][disputeValue][1][
+                    i
+                ];
                 honestyScore[juror] += 1;
             }
 
@@ -592,33 +587,40 @@ contract WebDemocracy is ERC20, Ownable {
                     _disputeID,
                     winnerNum
                 );
+                address juror = juryDisputeCount[_disputeID][disputeValue][2][
+                    i
+                ];
+                honestyScore[juror] -= 1;
             }
         } else {
-            winnerNum = 2;
-            looserNum = 1;
-
             winnerAddress = disputeInfo[_disputeID].seller;
 
             uint256 rewardEach = (feeRefund - feeProtocol) / votedSeller;
 
             for (uint256 i; i < votedSeller; i++) {
-                payable(
-                    juryDisputeCount[_disputeID][disputeValue][winnerNum][i]
-                ).transfer(rewardEach);
-                address juror = juryDisputeCount[_disputeID][disputeValue][
-                    winnerNum
-                ][i];
+                payable(juryDisputeCount[_disputeID][disputeValue][2][i])
+                    .transfer(rewardEach);
+                address juror = juryDisputeCount[_disputeID][disputeValue][2][
+                    i
+                ];
                 honestyScore[juror] += 1;
             }
 
             for (uint256 i; i < votedBuyer; i++) {
                 penalizeLoosers(
-                    juryDisputeCount[_disputeID][disputeValue][looserNum][i],
+                    juryDisputeCount[_disputeID][disputeValue][1][i],
                     _disputeID,
                     winnerNum
                 );
+                address juror = juryDisputeCount[_disputeID][disputeValue][1][
+                    i
+                ];
+                honestyScore[juror] -= 1;
             }
         }
+        payable(webDemocracy).transfer(feeProtocol); // Payment for WD
+        payable(winnerAddress).transfer(feeRefund); // Fees back to the winner
+        (disputeInfo[_disputeID].disputaSC).setWinner(winnerAddress); // Set winner to be able to withdraw his funds from the Ecommerce contract.
     }
 
     /**
