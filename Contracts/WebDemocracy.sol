@@ -254,17 +254,21 @@ contract WebDemocracy is ERC20, Ownable {
      * the protocol can substract fees in case the Jury did not vote.
      * @param _amount: Total amount willing to unstake.
      */
-    function unStake(uint256 _amount) public {
-        require(tokensStaked[msg.sender] > 0, "0 tokens staked");
-        require(!underDispute[msg.sender], "Your dispute is not finished");
+    function unStake(uint256 _amount, address _juror) public {
+        require(
+            msg.sender == _juror || msg.sender == webDemocracy,
+            "Not your tokens"
+        );
+        require(tokensStaked[_juror] > 0, "0 tokens staked");
+        require(!underDispute[_juror], "Your dispute is not finished");
         // Update mapping tokenStaked
-        tokensStaked[msg.sender] -= _amount;
+        tokensStaked[_juror] -= _amount;
         // Transfer the tokens back to the staker
-        _transfer(address(this), msg.sender, _amount);
-        jurorStaking[msg.sender] = false;
+        _transfer(address(this), _juror, _amount);
+        jurorStaking[_juror] = false;
 
-        if (tokensStaked[msg.sender] == 0) {
-            jurorStaking[msg.sender] = false;
+        if (tokensStaked[_juror] == 0) {
+            jurorStaking[_juror] = false;
         }
     }
 
@@ -377,7 +381,7 @@ contract WebDemocracy is ERC20, Ownable {
             juryDispute[_disputeID] = _jurySelected;
         }
 
-        for (uint256 i; i > _jurySelected.length; i++) {
+        for (uint256 i; i < _jurySelected.length; i++) {
             rightToVote[_disputeID][_jurySelected[i]] = true;
             underDispute[_jurySelected[i]] = true; // It will store the Jury as underDispute to do not allow unstake.
         }
@@ -392,20 +396,24 @@ contract WebDemocracy is ERC20, Ownable {
      * @param _jurorRevocated: The Juror the protocol removes.
      * @param _newJuror: The new Juror the protocol stores.
      * @param _disputeID: ID representing the Dispute.
+     * @param _dificulty: Time given depending on the dificulty. 1 day => 24 * 60 * 60
      */
     function revocateJuror(
         address _jurorRevocated,
         address _newJuror,
-        uint256 _disputeID
+        uint256 _disputeID,
+        uint256 _dificulty
     ) public onlyOwner {
         uint256 nbJuryDispute = juryDispute[_disputeID].length;
         rightToVote[_disputeID][_newJuror] = true; // Give permissions to vote
-
         for (uint256 i; i < nbJuryDispute; i++) {
             if (juryDispute[_disputeID][i] == _jurorRevocated) {
                 juryDispute[_disputeID][i] = _newJuror;
 
                 penalizeInactiveJuror(_jurorRevocated, _disputeID); // The protocol keeps the penaltyFee if the Juror did not vote
+                disputeInfo[_disputeID].timeToVote =
+                    block.timestamp +
+                    _dificulty; // Update time to vote
             }
         }
 
@@ -488,7 +496,8 @@ contract WebDemocracy is ERC20, Ownable {
         } else {
             disputeValue = 1;
         }
-
+        underDispute[_jurorAddress] = false;
+        unStake(penaltyFee, _jurorAddress); // Unstake penaltyFee
         _transfer(_jurorAddress, address(this), penaltyFee); // The protocol keeps the penaltyFee if the Juror did not vote
     }
 
@@ -709,6 +718,8 @@ contract WebDemocracy is ERC20, Ownable {
         return arbitrationFeePerJuror * _nbJury;
     }
 
+    // Testing //
+
     function balanceUser(address _juror) public view returns (uint256) {
         return ERC20.balanceOf(_juror);
     }
@@ -723,6 +734,10 @@ contract WebDemocracy is ERC20, Ownable {
         returns (bool)
     {
         return rightToVote[_id][_juror];
+    }
+
+    function amountStaked(address _juror) public view returns (uint256) {
+        return tokensStaked[_juror];
     }
 
     receive() external payable {}
