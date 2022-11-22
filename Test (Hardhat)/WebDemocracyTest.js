@@ -265,10 +265,6 @@ describe("WebDemocracy", function () {
       account6.address
     );
 
-    console.log("\n-Juror winner 1 balance is :", balanceJurorWinner1Before);
-    console.log("-Juror winner 2 balance is :", balanceJurorWinner2Before);
-    console.log("-Juror looser 3 balance is :", balanceJurorLooser3Before);
-
     // Web democracy balance before withdraWal the fees and share the comisions
     const balanceWebDemocracyContractBefore = await ethers.provider.getBalance(
       webDemocracy.address
@@ -303,8 +299,8 @@ describe("WebDemocracy", function () {
     console.log("\n-The accepted Jury is:", acceptedJury);
     console.log("\n-Account3: ", rightToVote3);
     console.log("-Account4: ", rightToVote4);
-    console.log("-Account5: ", rightToVote5);
-    console.log("-Account6: ", rightToVote6);
+    console.log("-Account5 (Juror revocated): ", rightToVote5);
+    console.log("-Account6 (New Juror): ", rightToVote6);
 
     // Get balance Juror AFTER Withdrawal
     const balanceJurorWinner1After = await ethers.provider.getBalance(
@@ -316,10 +312,6 @@ describe("WebDemocracy", function () {
     const balanceJurorLooser3After = await ethers.provider.getBalance(
       account6.address
     );
-
-    console.log("\n-Juror winner 1 balance is :", balanceJurorWinner1After);
-    console.log("-Juror winner 2 balance is :", balanceJurorWinner2After);
-    console.log("-Juror looser 3 balance is :", balanceJurorLooser3After);
 
     const rewardJuror1 =
       Number(balanceJurorWinner1After) - Number(balanceJurorWinner1Before);
