@@ -698,35 +698,6 @@ contract WebDemocracy is ERC20, Ownable {
         return arbitrationFeePerJuror * _nbJury;
     }
 
-    // Testing funtions//
-
-    function balanceUser(address _juror) public view returns (uint256) {
-        return ERC20.balanceOf(_juror);
-    }
-
-    function jurySelected(uint256 _id) public view returns (address[] memory) {
-        return juryDispute[_id];
-    }
-
-    function juryRightToVote(uint256 _id, address _juror)
-        public
-        view
-        returns (bool)
-    {
-        return rightToVote[_id][_juror];
-    }
-
-    function amountStaked(address _juror) public view returns (uint256) {
-        return tokensStaked[_juror];
-    }
-
-    function checkTokenPrice() public view returns (uint256) {
-        return tokenPrice;
-    }
-
-    function checkWDFee() public view returns (uint256) {
-        return protocolFee;
-    }
 
     receive() external payable {}
 }
