@@ -251,7 +251,7 @@ describe("WebDemocracy", function () {
     expect(updatedFee).to.equal(5);
   });
 
-  // Buy tokens, stake, generate dispute, vote and penalize
+  // Buy tokens, stake, generate dispute, vote, penalize, appel, share dispute fees and allow to withdrawal the winner.
   it("Full process WEB DEMOCRACY (Buy product (Eccomerce.sol), Buy tokens, Stake tokens, Generate dispute, Store Jury, Vote, Penalize, ", async function () {
     const {
       owner,
