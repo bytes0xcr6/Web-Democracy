@@ -68,7 +68,7 @@ contract Ecommerce {
             "You need to be the Buyer or the Seller"
         );
         disputeFee = checkArbitrationFee();
-        require(msg.value >= disputeFee / 2);
+        require(msg.value >= disputeFee / 2, "Send half of the Jury fee");
         require(!disputeGenerated, "Only 1 dispute per SC");
         require(!underApelation, "Apelation processed or finished");
         if (!disputeRequested) {
@@ -93,6 +93,7 @@ contract Ecommerce {
             msg.sender == buyer || msg.sender == seller,
             "You need to be the Buyer or the Seller"
         );
+        require(msg.value >= disputeFee / 2, "Send half of the Jury fee");
 
         if (!underApelation) {
             apelationFeeReceived += disputeFee / 2;
@@ -135,6 +136,10 @@ contract Ecommerce {
         return seller;
     }
 
+    function checkWinner() public view returns (address) {
+        return winner;
+    }
+
     /* @dev The Arbitrage contract will set the winner externally and
      *  Setter for the cold down time in case complainants want to appel. They cannot withdraw the contract value until it has passed
      */
@@ -144,7 +149,10 @@ contract Ecommerce {
     {
         winner = _winner;
         disputeID = _disputeID;
-        coldDowntimeAppeal = 1 days + block.timestamp;
+
+        if (!underApelation) {
+            coldDowntimeAppeal = 1 days + block.timestamp;
+        }
     }
 
     function buyProduct() public payable {
