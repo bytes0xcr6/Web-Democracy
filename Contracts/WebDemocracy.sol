@@ -515,7 +515,7 @@ contract WebDemocracy is ERC20, Ownable {
         uint8 disputeValue;
         uint8 totalVotes;
         uint8 votesNeeded = disputeInfo[_disputeID].juryNeeded;
-
+        rightToVote[_disputeID][msg.sender] = false;
         // Determinate if the Dispute is under apelation or not.
         if (disputeInfo[_disputeID].appealCount == 0) {
             disputeValue = 0;
@@ -617,7 +617,10 @@ contract WebDemocracy is ERC20, Ownable {
         }
         payable(webDemocracy).transfer(feeProtocol); // Payment for WD
         payable(winnerAddress).transfer(feeRefund); // Fees back to the winner
-        (disputeInfo[_disputeID].disputaSC).setWinner(winnerAddress); // Set winner to be able to withdraw his funds from the Ecommerce contract.
+        (disputeInfo[_disputeID].disputaSC).setWinner(
+            winnerAddress,
+            _disputeID
+        ); // Set winner to be able to withdraw his funds from the Ecommerce contract.
     }
 
     /**
@@ -632,7 +635,7 @@ contract WebDemocracy is ERC20, Ownable {
      * @dev Setter stop the protocol to generate new Disputes.
      *  It can be used while maintenance or if needed.
      */
-    function stopNewDisputes() private onlyOwner {
+    function stopNewDisputes() public onlyOwner {
         protocolWorking = false;
     }
 
@@ -640,7 +643,7 @@ contract WebDemocracy is ERC20, Ownable {
      * @dev Setter to update the Fee Web Democracy gets.
      * @param _newFee: New fee we want to set for Web Democracy.
      */
-    function _setWDFee(uint8 _newFee) private onlyOwner {
+    function _setWDFee(uint8 _newFee) public onlyOwner {
         protocolFee = _newFee;
     }
 
@@ -648,7 +651,7 @@ contract WebDemocracy is ERC20, Ownable {
      * @dev Setter to update the Owner address.
      * @param _newOwner: New address we want to set as the Owner.
      */
-    function setNewOnwer(address payable _newOwner) private onlyOwner {
+    function setNewOnwer(address payable _newOwner) public onlyOwner {
         webDemocracy = _newOwner;
     }
 
