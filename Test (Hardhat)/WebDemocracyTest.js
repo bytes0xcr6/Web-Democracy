@@ -16,7 +16,13 @@ describe("WebDemocracy", function () {
       account6,
       account7, // Seller
       account8, // Buyer
+      AppealJuror1,
+      AppealJuror2,
+      AppealJuror3,
     ] = await ethers.getSigners();
+
+    const ownerBalance = await ethers.provider.getBalance(owner.address);
+
     const WebDemocracy = await ethers.getContractFactory("WebDemocracy");
     const webDemocracy = await WebDemocracy.deploy(owner.address);
 
@@ -34,6 +40,19 @@ describe("WebDemocracy", function () {
     const day = 24 * 60 * 60; // 24 hours * 60 minuts * 60 secconds (1 day)
     const now = Date.now();
 
+    // Check balance after deployment WebDemocracy SC
+    const balanceOwnerAfterDeployment = await ethers.provider.getBalance(
+      owner.address
+    );
+
+    const feeWebDemocracyDeployment =
+      Number(ownerBalance) - Number(balanceOwnerAfterDeployment);
+    console.log(
+      `* Fee paid after deployment Web Democracy contract: ${ethers.utils.formatEther(
+        String(feeWebDemocracyDeployment)
+      )} Ethers`
+    );
+
     return {
       owner,
       account1,
@@ -48,11 +67,14 @@ describe("WebDemocracy", function () {
       account8, // Buyer
       day,
       now,
+      AppealJuror1,
+      AppealJuror2,
+      AppealJuror3,
     };
   }
 
-  // Check that the Seller and Buyer´s addres are set. ECOMMERCE
-  it("Check Buyer and Seller Ecommerce", async function () {
+  // Check that the Seller and Buyer´s addres are set. Also, try to withdrawn the total Smart contrac value. ECOMMERCE
+  it("Check Buyer and Seller and try to withdrawn Ecommerce", async function () {
     const { ecommerce, account7, account8 } = await loadFixture(deployment);
 
     // Purchase of the product in the Ecommerce contract
@@ -65,7 +87,14 @@ describe("WebDemocracy", function () {
     console.log("-buyer: ", buyer);
     console.log("-Seller: ", seller);
 
+    // Expect reverted if the withdrawnTime to open a dispute is not over
+    await expect(ecommerce.connect(account8).withdrawal()).to.be.revertedWith(
+      "The withdrawn time is not over"
+    );
+
+    // Expect account8 to be set as Buyer
     expect(buyer).to.equal(account8.address);
+    // Expect account7 to be set as Seller
     expect(seller).to.equal(account7.address);
   });
 
@@ -176,6 +205,9 @@ describe("WebDemocracy", function () {
       ecommerce,
       day,
       now,
+      AppealJuror1,
+      AppealJuror2,
+      AppealJuror3,
     } = await loadFixture(deployment);
 
     // Buy and Stake tokens for Jury to vote and be penalized
@@ -238,6 +270,11 @@ describe("WebDemocracy", function () {
     // // Voting from 2 Jury selected
     await webDemocracy.connect(account3).vote(0, 1);
     await webDemocracy.connect(account4).vote(0, 1);
+
+    // Try to vote 2 times with the same Juror
+    await expect(webDemocracy.connect(account4).vote(0, 1)).to.be.revertedWith(
+      "You are not allow to vote"
+    );
 
     // Increase the time to revocate a Juror
     await ethers.provider.send("evm_increaseTime", [now + day]);
@@ -382,12 +419,106 @@ describe("WebDemocracy", function () {
         protocolProfit
       )} ETH`
     );
+
+    // Get Winner position from Storage at Ecommerce contract and format bytes to match the Buyer address
+    const winnerStorage = await ethers.provider.getStorageAt(
+      ecommerce.address,
+      1
+    );
+
+    console.log("*** Winner", winnerStorage);
+    console.log("*** Seller", account7.address);
+
+    const account8LowerCase = account8.address.toLowerCase();
+
+    const winnerFormated = winnerStorage.slice(0, 2) + winnerStorage.slice(26);
+    expect(winnerFormated.toLowerCase()).to.equal(account8LowerCase);
+    console.log(`\n-The winner is the Buyer with address: ${winnerFormated} `);
+
+    //*** APELATION PROCESS FROM THE ECOMMERCE CONTRACT ***/
+
+    // Expect reverted if the ColdDownTime to appeal has not passed
+    await expect(ecommerce.connect(account8).withdrawal()).to.be.revertedWith(
+      "You need to wait until the appeal time is over"
+    );
+
+    // Start apelation process
+    await ecommerce.connect(account7).appeal();
+
+    // Store Jury for the apelation process
+    await webDemocracy.storeJurys(0, [
+      AppealJuror1.address,
+      AppealJuror2.address,
+      AppealJuror3.address,
+    ]);
+
+    // Voting process with the new Jury
+    await webDemocracy.connect(AppealJuror1).vote(0, 1);
+    await webDemocracy.connect(AppealJuror2).vote(0, 2);
+    await webDemocracy.connect(AppealJuror3).vote(0, 2);
+
+    // Check if the Seller was set as winnerç
+    const winnerAppealStorage = await ethers.provider.getStorageAt(
+      ecommerce.address,
+      1
+    );
+
+    const account7LowerCase = account7.address.toLowerCase();
+
+    const winnerAppealFormated =
+      winnerAppealStorage.slice(0, 2) + winnerAppealStorage.slice(26);
+
+    expect(winnerAppealFormated.toLowerCase()).to.equal(account7LowerCase);
+
+    console.log(`\n-The winner is the Buyer with address: ${winnerFormated} `);
+
+    // //*** WITHDRAWAL PROCESS FROM ECOMMERCE CONTRACT (When dispute and apelation are finished).***/
+
+    // // Expect reverted if the ColdDownTime to appeal has not passed
+    // await expect(ecommerce.connect(account8).withdrawal()).to.be.revertedWith(
+    //   "You need to wait until the appeal time is over"
+    // );
+
+    // // Increase time until
+    // await ethers.provider.send("evm_increaseTime", [now + day]);
+
+    // // Expect reverted if the ColdDownTime to appeal has not passed
+    // await expect(ecommerce.connect(account7).withdrawal()).to.be.revertedWith(
+    //   "You are not the winner"
+    // );
+
+    // // Get the winner balance before and after to compare it
+    // const balanceWinnerBefore = await ethers.provider.getBalance(
+    //   account8.address
+    // );
+
+    // await ecommerce.connect(account8).withdrawal();
+
+    // const balanceWinnerAfter = await ethers.provider.getBalance(
+    //   account8.address
+    // );
+
+    // const winnerProfit =
+    //   Number(balanceWinnerAfter) - Number(balanceWinnerBefore);
+
+    // console.log(
+    //   `* After withdrawal Winner balance, winner balance increased: ${ethers.utils.formatEther(
+    //     String(winnerProfit)
+    //   )} Ethers`
+    // );
+
+    // // We expect it to be greater than 9, as it will consume some gas and will not be 10ETH
+    // expect(
+    //   Number(ethers.utils.formatEther(balanceWinnerAfter)) -
+    //     Number(ethers.utils.formatEther(balanceWinnerBefore))
+    // ).to.be.greaterThan(9);
   });
 });
 
 // MISSING TEST
-// Check Winner is set in the Ecommerce
-// Increase time and allow to withdraw purchase value - Ecommerce
+// Update token price
+// Stop disputes
+// set new owner
 
 // INCREASE TIME
 //await ethers.provider.send("evm_increaseTime", [10]) // add 10 seconds
