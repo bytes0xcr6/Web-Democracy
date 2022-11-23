@@ -350,7 +350,7 @@ contract WebDemocracy is ERC20, Ownable {
         disputeInfo[_disputeID].comision = msg.value;
         disputeInfo[_disputeID].buyerCount = 0;
         disputeInfo[_disputeID].sellerCount = 0;
-        disputeInfo[_disputeID].timeToVote = _dificulty;
+        disputeInfo[_disputeID].timeToVote = block.timestamp + _dificulty;
         disputeInfo[_disputeID].disputeStatus = DisputeStatus.UnderApelation;
 
         emit DisputeGenerated(
@@ -627,32 +627,24 @@ contract WebDemocracy is ERC20, Ownable {
      * @dev Setter for the Token price while the private round. I can be called only by the Owner.
      * @param _price: New token price we want to set.
      */
-    function updateTokenPrice(uint256 _price) private onlyOwner {
+    function updateTokenPrice(uint256 _price) public onlyOwner {
         tokenPrice = _price;
     }
 
     /**
-     * @dev Setter stop the protocol to generate new Disputes.
+     * @dev Setter stop or reanude the protocol to generate new Disputes.
      *  It can be used while maintenance or if needed.
      */
-    function stopNewDisputes() public onlyOwner {
-        protocolWorking = false;
+    function stopStartNewDisputes() public onlyOwner {
+        protocolWorking = !protocolWorking;
     }
 
     /**
      * @dev Setter to update the Fee Web Democracy gets.
      * @param _newFee: New fee we want to set for Web Democracy.
      */
-    function _setWDFee(uint8 _newFee) public onlyOwner {
+    function updateWDFee(uint8 _newFee) public onlyOwner {
         protocolFee = _newFee;
-    }
-
-    /**
-     * @dev Setter to update the Owner address.
-     * @param _newOwner: New address we want to set as the Owner.
-     */
-    function setNewOnwer(address payable _newOwner) public onlyOwner {
-        webDemocracy = _newOwner;
     }
 
     /**
@@ -726,6 +718,14 @@ contract WebDemocracy is ERC20, Ownable {
 
     function amountStaked(address _juror) public view returns (uint256) {
         return tokensStaked[_juror];
+    }
+
+    function checkTokenPrice() public view returns (uint256) {
+        return tokenPrice;
+    }
+
+    function checkWDFee() public view returns (uint256) {
+        return protocolFee;
     }
 
     receive() external payable {}
