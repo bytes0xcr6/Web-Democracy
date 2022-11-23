@@ -251,7 +251,7 @@ describe("WebDemocracy", function () {
     expect(updatedFee).to.equal(5);
   });
 
-  // Buy tokens, stake, generate dispute, vote and penalize
+  // Buy tokens, stake, generate dispute, vote, penalize, appel, share dispute fees and allow to withdrawal the winner.
   it("Full process WEB DEMOCRACY (Buy product (Eccomerce.sol), Buy tokens, Stake tokens, Generate dispute, Store Jury, Vote, Penalize, ", async function () {
     const {
       owner,
@@ -589,13 +589,3 @@ describe("WebDemocracy", function () {
     ).to.be.greaterThan(9);
   });
 });
-
-// INCREASE TIME
-//await ethers.provider.send("evm_increaseTime", [10]) // add 10 seconds
-
-// // Increase the time withdrawal fee
-// await ethers.provider.send("evm_increaseTime", [now + day]);
-
-//    // Adjust time to vote (1 day)
-// const day = 24 * 60 * 60; // 24 hours * 60 minuts * 60 secconds (1 day)
-// const now = Date.now();
