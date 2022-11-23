@@ -20,14 +20,18 @@ contract Ecommerce {
     address public buyer;
     address public seller;
     address public winner;
+    uint256 disputeID;
     uint24 public dificulty = 1 days; // Easy (Ecommerce)
     uint256 public disputeFee; // Aprox 10$
     uint256 public disputeFeeReceived;
+    uint256 public apelationFeeReceived;
     bool public disputeRequested;
     uint8 public nbJuryNeeded = 3; // Set by default for Ecommerce contracts, depending on the arrangement with the partner it could change.
     uint256 coldDowntimeAppeal;
     uint256 withdrawnTime;
     bool disputeGenerated;
+    bool ApelationGenerated;
+    bool underApelation;
     /* Dispute levels.*/
     uint256 easy = block.timestamp + 1 days; // Easy level.
     // uint intermediate = block.timestamp + 1 weeks; // Intermediate level.
@@ -41,6 +45,14 @@ contract Ecommerce {
         _;
     }
 
+    modifier onlyComplainants() {
+        require(
+            msg.sender == buyer || msg.sender == seller,
+            "You need to be a Seller or Buyer"
+        );
+        _;
+    }
+
     constructor(WebDemocracy _arbitrage) {
         seller = msg.sender;
         arbitrage = _arbitrage;
@@ -50,7 +62,7 @@ contract Ecommerce {
             Also, it will start the decentralized dispute, generating random judges and allowing them to vote.
             The msg.value should be at least half of the disputeFee, as it needs to be called twice , it will transfer the total disputeFee value.
     */
-    function generateDispute() public payable {
+    function generateDispute() public payable onlyComplainants {
         require(
             msg.sender == buyer || msg.sender == seller,
             "You need to be the Buyer or the Seller"
@@ -58,6 +70,7 @@ contract Ecommerce {
         disputeFee = checkArbitrationFee();
         require(msg.value >= disputeFee / 2);
         require(!disputeGenerated, "Only 1 dispute per SC");
+        require(!underApelation, "Apelation processed or finished");
         if (!disputeRequested) {
             disputeFeeReceived += disputeFee / 2;
             disputeRequested = true;
@@ -71,29 +84,46 @@ contract Ecommerce {
                 nbJuryNeeded
             );
             disputeGenerated = true; // Set the value to only be called once
+            withdrawnTime = 0; // Set withdrawal time to 0
         }
     }
 
-    function appeal(uint256 _disputeID) public {
+    function appeal() public payable onlyComplainants {
         require(
             msg.sender == buyer || msg.sender == seller,
             "You need to be the Buyer or the Seller"
         );
-        arbitrage.appeal(_disputeID, nbJuryNeeded, dificulty);
+
+        if (!underApelation) {
+            apelationFeeReceived += disputeFee / 2;
+            underApelation = true;
+        } else {
+            apelationFeeReceived += disputeFee / 2;
+            // We will do a call to the Arbitrage SC and the address will be assigned to disputasSC
+            arbitrage.appeal{value: disputeFee}(
+                disputeID,
+                nbJuryNeeded,
+                dificulty
+            );
+            disputeGenerated = true; // Set the value to only be called once
+            withdrawnTime = 0; // Set withdrawal time to 0
+        }
     }
 
     /* @dev this function will allow the winner to withdrawal the total balance in the contract
      */
     function withdrawal() external {
         require(
-            withdrawnTime > block.timestamp,
+            withdrawnTime < block.timestamp || withdrawnTime == 0,
             "The withdrawn time is not over"
         );
         require(
             coldDowntimeAppeal <= block.timestamp,
             "You need to wait until the appeal time is over"
         );
-        require(winner == msg.sender, "You are not the winner");
+        if (disputeRequested) {
+            require(winner == msg.sender, "You are not the winner");
+        }
         payable(winner).transfer(address(this).balance);
     }
 
@@ -108,8 +138,12 @@ contract Ecommerce {
     /* @dev The Arbitrage contract will set the winner externally and
      *  Setter for the cold down time in case complainants want to appel. They cannot withdraw the contract value until it has passed
      */
-    function setWinner(address _winner) external onlyArbitrage {
+    function setWinner(address _winner, uint256 _disputeID)
+        external
+        onlyArbitrage
+    {
         winner = _winner;
+        disputeID = _disputeID;
         coldDowntimeAppeal = 1 days + block.timestamp;
     }
 
