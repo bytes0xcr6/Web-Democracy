@@ -189,6 +189,68 @@ describe("WebDemocracy", function () {
     console.log("-Addr2 balance after transfer received:", balanceAddr2After);
   });
 
+  // Update token price and check that it was updated.
+  it("Update token price", async function () {
+    const { webDemocracy } = await loadFixture(deployment);
+
+    const oldTokenPrice = await webDemocracy.checkTokenPrice();
+
+    await webDemocracy.updateTokenPrice(ethers.utils.parseEther("0.05"));
+
+    const newTokenPrice = await webDemocracy.checkTokenPrice();
+
+    console.log(
+      `-Old token price is: ${ethers.utils.formatEther(
+        oldTokenPrice
+      )} Ethers each DEM`
+    );
+    console.log(
+      `-New token price is: ${ethers.utils.formatEther(
+        newTokenPrice
+      )} Ethers each DEM`
+    );
+
+    expect("0.05").to.equal(ethers.utils.formatEther(newTokenPrice));
+  });
+
+  // Change the protocolWorking value to false;
+  it("Stop and restart new disputes", async function () {
+    const { owner, day, now, webDemocracy } = await loadFixture(deployment);
+
+    // Stop disputes
+    await webDemocracy.stopStartNewDisputes();
+
+    await expect(
+      webDemocracy.generateDispute(owner.address, owner.address, now + day, 3, {
+        value: ethers.utils.parseEther("0.015"),
+      })
+    ).to.be.revertedWith("Protocol under maintenance");
+
+    // Reanude disputes
+    await webDemocracy.stopStartNewDisputes();
+
+    await webDemocracy.generateDispute(
+      owner.address,
+      owner.address,
+      now + day,
+      3,
+      {
+        value: ethers.utils.parseEther("0.015"),
+      }
+    );
+  });
+
+  // Check if the Protocol fee is updated
+  it("Update Web democracy fee", async function () {
+    const { webDemocracy } = await loadFixture(deployment);
+
+    await webDemocracy.updateWDFee(5);
+
+    const updatedFee = await webDemocracy.checkWDFee();
+
+    expect(updatedFee).to.equal(5);
+  });
+
   // Buy tokens, stake, generate dispute, vote and penalize
   it("Full process WEB DEMOCRACY (Buy product (Eccomerce.sol), Buy tokens, Stake tokens, Generate dispute, Store Jury, Vote, Penalize, ", async function () {
     const {
@@ -223,11 +285,23 @@ describe("WebDemocracy", function () {
     await webDemocracy
       .connect(account6)
       .buyTokens(1000, { value: ethers.utils.parseEther("1") });
+    await webDemocracy
+      .connect(AppealJuror1)
+      .buyTokens(1000, { value: ethers.utils.parseEther("1") });
+    await webDemocracy
+      .connect(AppealJuror2)
+      .buyTokens(1000, { value: ethers.utils.parseEther("1") });
+    await webDemocracy
+      .connect(AppealJuror3)
+      .buyTokens(1000, { value: ethers.utils.parseEther("1") });
 
     await webDemocracy.connect(account3).stake(500);
     await webDemocracy.connect(account4).stake(500);
     await webDemocracy.connect(account5).stake(500);
     await webDemocracy.connect(account6).stake(500);
+    await webDemocracy.connect(AppealJuror1).stake(500);
+    await webDemocracy.connect(AppealJuror2).stake(500);
+    await webDemocracy.connect(AppealJuror3).stake(500);
 
     const balanceAcco5Before = await webDemocracy.balanceUser(account5.address);
     const amountStakedBefore = await webDemocracy.amountStaked(
@@ -433,7 +507,9 @@ describe("WebDemocracy", function () {
 
     const winnerFormated = winnerStorage.slice(0, 2) + winnerStorage.slice(26);
     expect(winnerFormated.toLowerCase()).to.equal(account8LowerCase);
-    console.log(`\n-The winner is the Buyer with address: ${winnerFormated} `);
+    console.log(
+      `\n-Dispute winner is the Buyer with address: ${winnerFormated} `
+    );
 
     //*** APELATION PROCESS FROM THE ECOMMERCE CONTRACT ***/
 
@@ -443,7 +519,12 @@ describe("WebDemocracy", function () {
     );
 
     // Start apelation process
-    await ecommerce.connect(account7).appeal();
+    await ecommerce
+      .connect(account7)
+      .appeal({ value: ethers.utils.parseEther("0.0075") });
+    await ecommerce
+      .connect(account8)
+      .appeal({ value: ethers.utils.parseEther("0.0075") });
 
     // Store Jury for the apelation process
     await webDemocracy.storeJurys(0, [
@@ -458,74 +539,53 @@ describe("WebDemocracy", function () {
     await webDemocracy.connect(AppealJuror3).vote(0, 2);
 
     // Check if the Seller was set as winnerç
-    const winnerAppealStorage = await ethers.provider.getStorageAt(
-      ecommerce.address,
-      1
+    const winnerAppeal = await ecommerce.checkWinner();
+
+    expect(winnerAppeal).to.equal(account7.address);
+
+    console.log(
+      `\n-Apelation winner is the Seller with address: ${winnerAppeal} `
     );
 
-    const account7LowerCase = account7.address.toLowerCase();
+    //*** WITHDRAWAL PROCESS FROM ECOMMERCE CONTRACT (When dispute and apelation are finished).***/
 
-    const winnerAppealFormated =
-      winnerAppealStorage.slice(0, 2) + winnerAppealStorage.slice(26);
+    // Expect reverted if the ColdDownTime to appeal has not passed
+    await expect(ecommerce.connect(account7).withdrawal()).to.be.revertedWith(
+      "You need to wait until the appeal time is over"
+    );
 
-    expect(winnerAppealFormated.toLowerCase()).to.equal(account7LowerCase);
+    // Increase time until
+    await ethers.provider.send("evm_increaseTime", [now + day]);
 
-    console.log(`\n-The winner is the Buyer with address: ${winnerFormated} `);
+    // Expect reverted if the ColdDownTime to appeal has not passed
+    await expect(ecommerce.connect(account8).withdrawal()).to.be.revertedWith(
+      "You are not the winner"
+    );
 
-    // //*** WITHDRAWAL PROCESS FROM ECOMMERCE CONTRACT (When dispute and apelation are finished).***/
+    // Get the winner balance before and after to compare it
+    const balanceWinnerBefore = await ethers.provider.getBalance(
+      account7.address
+    );
 
-    // // Expect reverted if the ColdDownTime to appeal has not passed
-    // await expect(ecommerce.connect(account8).withdrawal()).to.be.revertedWith(
-    //   "You need to wait until the appeal time is over"
-    // );
+    await ecommerce.connect(account7).withdrawal();
 
-    // // Increase time until
-    // await ethers.provider.send("evm_increaseTime", [now + day]);
+    const balanceWinnerAfter = await ethers.provider.getBalance(
+      account7.address
+    );
 
-    // // Expect reverted if the ColdDownTime to appeal has not passed
-    // await expect(ecommerce.connect(account7).withdrawal()).to.be.revertedWith(
-    //   "You are not the winner"
-    // );
+    const winnerProfit =
+      Number(balanceWinnerAfter) - Number(balanceWinnerBefore);
 
-    // // Get the winner balance before and after to compare it
-    // const balanceWinnerBefore = await ethers.provider.getBalance(
-    //   account8.address
-    // );
+    console.log(
+      `* After withdrawal Winner balance, winner balance increased: ${ethers.utils.formatEther(
+        String(winnerProfit)
+      )} Ethers`
+    );
 
-    // await ecommerce.connect(account8).withdrawal();
-
-    // const balanceWinnerAfter = await ethers.provider.getBalance(
-    //   account8.address
-    // );
-
-    // const winnerProfit =
-    //   Number(balanceWinnerAfter) - Number(balanceWinnerBefore);
-
-    // console.log(
-    //   `* After withdrawal Winner balance, winner balance increased: ${ethers.utils.formatEther(
-    //     String(winnerProfit)
-    //   )} Ethers`
-    // );
-
-    // // We expect it to be greater than 9, as it will consume some gas and will not be 10ETH
-    // expect(
-    //   Number(ethers.utils.formatEther(balanceWinnerAfter)) -
-    //     Number(ethers.utils.formatEther(balanceWinnerBefore))
-    // ).to.be.greaterThan(9);
+    // We expect it to be greater than 9, as it will consume some gas and will not be 10ETH
+    expect(
+      Number(ethers.utils.formatEther(balanceWinnerAfter)) -
+        Number(ethers.utils.formatEther(balanceWinnerBefore))
+    ).to.be.greaterThan(9);
   });
 });
-
-// MISSING TEST
-// Update token price
-// Stop disputes
-// set new owner
-
-// INCREASE TIME
-//await ethers.provider.send("evm_increaseTime", [10]) // add 10 seconds
-
-// // Increase the time withdrawal fee
-// await ethers.provider.send("evm_increaseTime", [now + day]);
-
-//    // Adjust time to vote (1 day)
-// const day = 24 * 60 * 60; // 24 hours * 60 minuts * 60 secconds (1 day)
-// const now = Date.now();
