@@ -28,7 +28,7 @@ contract Ecommerce {
     bool public disputeRequested;
     uint8 public nbJuryNeeded = 3; // Set by default for Ecommerce contracts, depending on the arrangement with the partner it could change.
     uint256 coldDowntimeAppeal;
-    uint256 withdrawnTime;
+    uint256 withdrawalTime;
     bool disputeGenerated;
     bool ApelationGenerated;
     bool underApelation;
@@ -84,7 +84,7 @@ contract Ecommerce {
                 nbJuryNeeded
             );
             disputeGenerated = true; // Set the value to only be called once
-            withdrawnTime = 0; // Set withdrawal time to 0
+            withdrawalTime = 0; // Set withdrawal time to 0
         }
     }
 
@@ -107,16 +107,17 @@ contract Ecommerce {
                 dificulty
             );
             disputeGenerated = true; // Set the value to only be called once
-            withdrawnTime = 0; // Set withdrawal time to 0
+            withdrawalTime = 0; // Set withdrawal time to 0
         }
     }
 
-    /* @dev this function will allow the winner to withdrawal the total balance in the contract
+    /* @dev this function will allow the winner to withdrawal the total balance in the contract or 
+     *  the Seller if the withdrawalTime is over and it is not under dispute or under appelation
      */
     function withdrawal() external {
         require(
-            withdrawnTime < block.timestamp || withdrawnTime == 0,
-            "The withdrawn time is not over"
+            withdrawalTime < block.timestamp || withdrawalTime == 0,
+            "The withdrawal time is not over"
         );
         require(
             coldDowntimeAppeal <= block.timestamp,
@@ -161,7 +162,7 @@ contract Ecommerce {
             "You need to send more ETH to buy the product"
         );
         buyer = msg.sender;
-        withdrawnTime = 1 weeks + block.timestamp;
+        withdrawalTime = 1 weeks + block.timestamp;
     }
 
     function checkArbitrationFee() public view returns (uint256) {
