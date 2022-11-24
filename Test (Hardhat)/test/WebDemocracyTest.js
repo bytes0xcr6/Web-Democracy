@@ -251,7 +251,7 @@ describe("WebDemocracy", function () {
     expect(updatedFee).to.equal(5);
   });
 
-  // Buy tokens, stake, generate dispute, vote, penalize, appel, share dispute fees and allow to withdrawal the winner.
+  // Buy tokens, stake, generate dispute, vote and penalize
   it("Full process WEB DEMOCRACY (Buy product (Eccomerce.sol), Buy tokens, Stake tokens, Generate dispute, Store Jury, Vote, Penalize, ", async function () {
     const {
       owner,
@@ -341,6 +341,25 @@ describe("WebDemocracy", function () {
       account5.address,
     ]);
 
+    // Check right to vote when we remove a Juror and add a new one
+    const acceptedJury = await webDemocracy.jurySelected(0);
+    const rightToVote3 = await webDemocracy.juryRightToVote(
+      0,
+      account3.address
+    );
+    const rightToVote4 = await webDemocracy.juryRightToVote(
+      0,
+      account4.address
+    );
+    const rightToVote5 = await webDemocracy.juryRightToVote(
+      0,
+      account5.address
+    );
+    const rightToVote6 = await webDemocracy.juryRightToVote(
+      0,
+      account6.address
+    );
+
     // // Voting from 2 Jury selected
     await webDemocracy.connect(account3).vote(0, 1);
     await webDemocracy.connect(account4).vote(0, 1);
@@ -386,25 +405,6 @@ describe("WebDemocracy", function () {
 
     // New Juror votes
     await webDemocracy.connect(account6).vote(0, 2);
-
-    // Check right to vote when we remove a Juror and add a new one
-    const acceptedJury = await webDemocracy.jurySelected(0);
-    const rightToVote3 = await webDemocracy.juryRightToVote(
-      0,
-      account3.address
-    );
-    const rightToVote4 = await webDemocracy.juryRightToVote(
-      0,
-      account4.address
-    );
-    const rightToVote5 = await webDemocracy.juryRightToVote(
-      0,
-      account5.address
-    );
-    const rightToVote6 = await webDemocracy.juryRightToVote(
-      0,
-      account6.address
-    );
 
     // Final Jury selected to vote
     console.log("\n-The accepted Jury is:", acceptedJury);
