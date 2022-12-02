@@ -15,12 +15,12 @@ import random
 
 def jury_odds(tokenStaked,honestyScore):
 
-    total_staked=0                  # Total de tokens stakeados 
+    total_staked=0                  # Total de tokens staked
     total_honesty=0                 # Total de puntos de honestidad
     sumation1=0                     # Contador donde sumaremos los tickets finales
     sumation2=0
     sumation3=0
-    probability_token_staked=[]     # Probabilidad basada en los tokens stakeados
+    probability_token_staked=[]     # Probabilidad basada en los tokens staked
     probablity_honesty_score=[]     # Probabilidad basada en los puntos de honestidad
     final_tickets=[]                # Lista de la probabilidad final de ser seleccionado
     final_array=[]                  # Lista FINAL con las probabilidades sumadas
@@ -35,13 +35,13 @@ def jury_odds(tokenStaked,honestyScore):
     if total_honesty==0:
         total_honesty=1   
 
-    # Total de tokens stakeados
+    # Total de tokens staked
     for i in range(len(tokenStaked)):
             total_staked+=tokenStaked[i]
     
-    # Eleccion de la longitud del rango en funcion del numero de jueces
+    # Eleccion de la longitud del rango en funcion del número de jueces
     if len(tokenStaked)<600:
-        # Probabilidad segun los tokens stakeados
+        # Probabilidad segun los tokens staked
         for i in range(len(tokenStaked)): 
                 probability_token_staked.append((tokenStaked[i]*5000)/total_staked)
     
@@ -53,7 +53,7 @@ def jury_odds(tokenStaked,honestyScore):
                 probablity_honesty_score.append((honestyScore[i]*5000)/total_honesty)
     
     elif 600<=len(tokenStaked)<1800:
-         # Probabilidad segun los tokens stakeados
+         # Probabilidad segun los tokens staked
         for i in range(len(tokenStaked)):
                 probability_token_staked.append((tokenStaked[i]*15000)/total_staked)
     
@@ -65,7 +65,7 @@ def jury_odds(tokenStaked,honestyScore):
                 probablity_honesty_score.append((honestyScore[i]*15000)/total_honesty)
     
     elif 1800<=len(tokenStaked)<4800:
-         # Probabilidad segun los tokens stakeados
+         # Probabilidad segun los tokens staked
         for i in range(len(tokenStaked)):
                 probability_token_staked.append((tokenStaked[i]*45000)/total_staked)
     
@@ -76,7 +76,7 @@ def jury_odds(tokenStaked,honestyScore):
             else:    
                 probablity_honesty_score.append((honestyScore[i]*45000)/total_honesty)
     else:
-         # Probabilidad segun los tokens stakeados
+         # Probabilidad segun los tokens staked
         for i in range(len(tokenStaked)):
                 probability_token_staked.append((tokenStaked[i]*150000)/total_staked)
     
@@ -109,7 +109,7 @@ def jury_odds(tokenStaked,honestyScore):
             final_array.append(math.ceil(sumation3))
 
     
-    return final_array
+    return final_array 
 
     
 
@@ -119,28 +119,28 @@ def jury_selection(tokenStaked,honestyScore):
     jueces_ganadores=[]
     final_array=jury_odds(tokenStaked,honestyScore)
 
-    # Generacion de los cinco numeros aleatorios en funcion del numero de jueces
+    # Generacion de los tres números aleatorios en funcion del número de jueces
     if len(tokenStaked)<600:
-        for i in range(5):
+        for i in range(3):
             winning_numbers.append(random.randint(0,10000))
     elif 600<=len(tokenStaked)<1800:
-        for i in range(5):
+        for i in range(3):
             winning_numbers.append(random.randint(0,15000))
     elif 1800<=len(tokenStaked)<4800:
-        for i in range(5):
+        for i in range(3):
             winning_numbers.append(random.randint(0,45000))
     else:
-        for i in range(5):
+        for i in range(3):
             winning_numbers.append(random.randint(0,150000))
 
     
-    # Elección de los 5 jueces
-    for i in range(5):
+    # Elección de los 3 jueces. 
+		for i in range(3): 
         for j in range(len(final_array)):
             if winning_numbers[i]<=(final_array)[j]: 
                 jueces_ganadores.append(j)
                 break
 
-    return jueces_ganadores
+    return jueces_ganadores 
     
 print(jury_selection([100,345,321,678,245,400,11],[1,2,0,4,1,-5,3]))
