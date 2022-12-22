@@ -7,4 +7,4 @@ Web Democracy is a protocol that judicially intervenes by empowering the holder 
 ----
 
 # Web Democracy - White Paper
-[Enjoy!](https://github.com/CristianRicharte6/Web-Democracy/files/10144150/Web.Democracy.-.White.paper.pdf)
+[📄 Enjoy!](https://github.com/CristianRicharte6/Web-Democracy/files/10287051/Web_Democracy.3.pdf)
