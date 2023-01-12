@@ -697,6 +697,4 @@ contract WebDemocracy is ERC20, Ownable {
     function arbitrationFee(uint8 _nbJury) public view returns (uint256) {
         return arbitrationFeePerJuror * _nbJury;
     }
-
-    receive() external payable {}
 }
