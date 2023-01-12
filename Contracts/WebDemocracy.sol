@@ -202,14 +202,6 @@ contract WebDemocracy is ERC20, Ownable {
     }
 
     /**
-     * @dev Internal function to get the total price, checking the actual price of the token. (Used during private round)
-     * @param _amount: The amount we would like to convert
-     */
-    function _totalPrice(uint256 _amount) internal view returns (uint256) {
-        return _amount * tokenPrice;
-    }
-
-    /**
      * @dev It generates new tokens and add them to the total contract balance.
      * @param _amount: Total amount we want to mint.
      */
@@ -655,6 +647,29 @@ contract WebDemocracy is ERC20, Ownable {
         sellingTokens = _status;
     }
 
+    /**
+     * @dev Setter to update the Fee each Juror gets.
+     * @param _newFee: New fee we want to set for each juror.
+     */
+    function _setArbitrationFee(uint256 _newFee) internal onlyOwner {
+        arbitrationFeePerJuror = _newFee;
+    }
+
+    /**
+     * @dev Getter for the protocol Fee;
+     */
+    function _checkProtocolFee() internal view returns (uint256) {
+        return protocolFee;
+    }
+
+    /**
+     * @dev Internal function to get the total price, checking the actual price of the token. (Used during private round)
+     * @param _amount: The amount we would like to convert
+     */
+    function _totalPrice(uint256 _amount) internal view returns (uint256) {
+        return _amount * tokenPrice;
+    }
+
     /*
      * @dev Geetter for how many DEM staked has the Juror address.
      * @param _juro: Juror address.
@@ -671,21 +686,6 @@ contract WebDemocracy is ERC20, Ownable {
         return jurorStaking[_juror];
     }
 
-    /**
-     * @dev Setter to update the Fee each Juror gets.
-     * @param _newFee: New fee we want to set for each juror.
-     */
-    function _setArbitrationFee(uint256 _newFee) internal onlyOwner {
-        arbitrationFeePerJuror = _newFee;
-    }
-
-    /**
-     * @dev Getter for the protocol Fee;
-     */
-    function _checkProtocolFee() internal view returns (uint256) {
-        return protocolFee;
-    }
-
     function _checkDispute(uint256 _disputeID)
         internal
         view
@@ -697,7 +697,6 @@ contract WebDemocracy is ERC20, Ownable {
     function arbitrationFee(uint8 _nbJury) public view returns (uint256) {
         return arbitrationFeePerJuror * _nbJury;
     }
-
 
     receive() external payable {}
 }
